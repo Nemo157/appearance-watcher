@@ -2,9 +2,11 @@ use ashpd::desktop::{
     settings::{ColorScheme, Contrast, Settings},
     Color,
 };
+use clap::Parser;
 use futures::stream::{Stream, StreamExt};
-use std::pin::pin;
 use tokio::{join, select};
+
+use std::pin::pin;
 
 trait ResultExt {
     type Ok;
@@ -136,13 +138,27 @@ struct Appearance {
     contrast: Option<Contrast>,
 }
 
+#[derive(Debug, Parser)]
+#[command(version, disable_help_subcommand = true)]
+struct Args {
+    /// Just query the current appearance and exit
+    #[arg(long)]
+    once: bool,
+}
+
 #[culpa::try_fn]
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
+
     let proxy = Settings::new().await?;
 
-    let mut appearance_stream = pin!(proxy.appearance_stream().await?);
-    while let Some(appearance) = appearance_stream.next().await {
-        println!("{}", serde_json::to_string(&appearance)?);
+    if args.once {
+        println!("{}", serde_json::to_string(&proxy.appearance().await?)?);
+    } else {
+        let mut appearance_stream = pin!(proxy.appearance_stream().await?);
+        while let Some(appearance) = appearance_stream.next().await {
+            println!("{}", serde_json::to_string(&appearance)?);
+        }
     }
 }
